@@ -1,0 +1,72 @@
+# To check more avaialble options see:
+# https://matplotlib.org/tutorials/introductory/customizing.html
+
+# BOXPLOT
+boxplot.notch : True
+
+boxplot.meanline : True
+boxplot.flierprops.color:           3A913F
+boxplot.flierprops.markeredgecolor: 3A913F
+boxplot.boxprops.color:     3A913F
+boxplot.whiskerprops.color:     3A913F
+boxplot.capprops.color:     3A913F
+boxplot.medianprops.color:     3A913F
+boxplot.meanprops.color:         3A913F  
+
+
+# FONT
+# font.family  : serif
+
+# TEXT
+text.color : dimgrey
+
+# AXES
+axes.edgecolor : (0.1,0.1,0.1) #Normalized RGB colours (from 0 to 1 instead of 0 to 255)
+axes.labelcolor : dimgrey
+axes.linewidth : 1
+axes.spines.top : False
+axes.spines.right : False
+axes.spines.bottom : False
+axes.spines.left : False
+axes.axisbelow:True
+
+# GRID
+axes.grid : True
+grid.alpha : 0.4
+grid.linestyle : -
+grid.linewidth : 0.5
+
+# LINES
+axes.prop_cycle : cycler('color', [ '3A913F', '75787B', 'DC582A', 'F0B323', '3D87CB']) #hex colours
+lines.linewidth : 2
+lines.markeredgewidth : 0.0
+
+# SCATTER PLOT
+scatter.marker : .
+
+# TICKS
+xtick.bottom: False
+ytick.left:False
+xtick.color:dimgrey
+ytick.color:dimgrey
+xtick.major.size:0.5
+ytick.major.size:0.5
+xtick.labelcolor:dimgrey
+ytick.labelcolor:dimgrey
+
+# IMAGE
+image.cmap: viridis 
+
+# Legend
+legend.framealpha:1
+legend.edgecolor: dimgrey
+
+
+
+# FIGURE OUTPUT 
+figure.figsize  : 10, 4
+figure.dpi : 150
+savefig.dpi : 300
+
+
+

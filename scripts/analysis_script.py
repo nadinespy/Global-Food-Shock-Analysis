@@ -68,9 +68,10 @@ gfs.rename_columns(crop_stats_df, rename_mapping)
 crop_mask = crop_stats_df['crop'].isin(['wheat', 'maize'])
 crop_stats_df = crop_stats_df[crop_mask]
 
-# get data from 1900 to 2023 for every region/country
+# get/create data from 1900 to 2023 (period in question) for every region/country
+# (NaNs for years where no data is available)
 start_year = 1900
-end_year = 2023
+end_year = 2018
 
 # create a dataframe for the desired year range for every country
 all_years_df = pd.DataFrame({
@@ -97,99 +98,19 @@ crop_stats_df = pd.concat(dfs)
 #--------------------------------------------------------------------------
 # EXPLORATORY DATA ANALYSIS
 #--------------------------------------------------------------------------
-# look at missing data percentages for relevant variables: 
-# yield (tonnes/ha), production (tonnes), hectares (ha)
+# divide tonnes by hectar where tonnes and hectares are existent, but tonnes/hectares aren't, 
+# then eliminate zeros - those are likely dirty data/incorrect, as countries will not have suddenly 
+# had zero yield in a given year, if before and after there was non-zero crop yield;
+# likewise, calculate tonnes where hectares and tonnes/ha exist, but tonnes don't
 
-# plot barplots of missing values for variables of interest grouped by country
-columns_to_visualize = ['tonnes', 'hectares', 'yield_tonnes_per_ha']
-gfs.plot_missing_data_proportions(crop_stats_df, 'country', columns_to_visualize, pathout_plots=pathout_plots)
-
-#--------------------------------------------------------------------------
-# check where tonnes and hectars are given, but not tonnes/ha, 
-# plot percentages
-
-# create a new column to represent the condition: first two columns 
-# (production (tonnes) & hectares (ha)) are not missing, and the third one 
-# (yield (tonnes/ha)) is missing
-crop_stats_df['ton_and_hec_not_missing'] = crop_stats_df.apply(
-    lambda row: 1 if (not pd.isna(row['tonnes']) and
-                      not pd.isna(row['hectares']) and
-                      pd.isna(row['yield_tonnes_per_ha'])) else 0, axis=1
-)
-
-# group the data by country, calculate the percentage of data where two columns not missing and the third one missing
-grouped = crop_stats_df.groupby('country')['ton_and_hec_not_missing'].mean() * 100
-
-# create the bar plot
-plt.figure(figsize=(10, 6))
-
-# plot the percentage of data where tonnes & hectares are not missing and 
-# tonnes/ha is missing
-plt.bar(
-    grouped.index,  # x-axis (countries)
-    grouped.values,  # height of the bars
-    color='blue',
-    label='tonnes & hectares exist, but tonnes/ha missing'
-)
-
-# customize the plot
-plt.title('percentage of data where tonnes & hectares exist, but tonnes/ha is missing by country')
-plt.xlabel('country')
-plt.ylabel('percentage (%)')
-plt.ylim(0, 100)  
-plt.xticks(rotation=45, ha='right')  
-plt.legend()
-plt.savefig(pathout_plots+r'distr_ton_hec_not_miss.png', bbox_inches='tight')  # 'bbox_inches' ensures labels are not cut off
-
-plt.show()
-#--------------------------------------------------------------------------
-# get distributions of yield (tonnes/ha) across years for each country
-
-gfs.plot_histograms(crop_stats_df, 'yield_tonnes_per_ha', 'country', 5, pathout_plots)
-#--------------------------------------------------------------------------
-# get distributions of yield (tonnes/ha) across countries for each 5-year period
-
-# group years into 5-year sections
-crop_stats_df['year_section'] = ((crop_stats_df['year'] - crop_stats_df['year'].min()) // 5) * 5
-gfs.plot_histograms(crop_stats_df, 'yield_tonnes_per_ha', 'year_section', 5, pathout_plots)
-#--------------------------------------------------------------------------
-# get time-series of total yield (tonnes/ha) median for each year across countries
-
-data_to_plot = crop_stats_df[['year', 'yield_tonnes_per_ha']].reset_index(drop=True)
-
-# use seaborn's lineplot function
-plt.figure(figsize=(12, 6))
-sns.lineplot(data=data_to_plot, x="year", y="yield_tonnes_per_ha", ci=95, estimator="median")
-
-plt.title('global median of yield (tonnes/ha) over time with bootstrapped uncertainty')
-plt.xlabel('year')
-plt.ylabel('yield (tonnes/ha)')
-plt.grid(True)
-plt.tight_layout()
-plt.savefig(pathout_plots+r'global_median_yield_tonnes_per_ha_years.png', bbox_inches='tight', dpi=300)
-plt.show()
-#--------------------------------------------------------------------------
-# get time-series of yield (tonnes/ha) for each country across regions
-
-gfs.plot_time_series_by_group(crop_stats_df, 'country', 'yield_tonnes_per_ha', pathout_plots, num_rows=5)
-
-#--------------------------------------------------------------------------
-# DATA CLEANING
-#--------------------------------------------------------------------------
-# handling missing values:
-# 1. divide tonnes by hectar where tonnes and hectares are existent,
-# but tonnes/hectares aren't, then eliminate zeros - those are likely dirty data/incorrect, 
-# as countries will not have suddenly had zero yield in a given year, if before and after there
-# was non-zero crop yield
-# 2. missing values at the start and end of the time period considered (1900 - 2023) shall not be 
-# # replaced; for missing values in between, we interpolate those using linspace() where missing 
-# data periods do not exceed 10 (otherwise datapoints remain NaN)  
-
-# create a copy of the original DataFrame
-new_crop_stats_df = crop_stats_df.copy()
+# calculate tonnes where hectares and tonnes/ha exist, but tonnes don't
+crop_stats_df = crop_stats_df.assign(tonnes=[row["tonnes"] 
+                                         if not pd.isnull(row["tonnes"]) 
+                                         else row["yield_tonnes_per_ha"]*row["hectares"] 
+                                         for i, row in crop_stats_df.iterrows() ])
 
 # 1. fill yield (tonnes/ha) based on whether tonnes & hectares exist, but tonnes/ha doesn't
-new_crop_stats_df['yield_tonnes_per_ha'] = new_crop_stats_df.apply(lambda row: 
+crop_stats_df['yield_tonnes_per_ha'] = crop_stats_df.apply(lambda row: 
     row['tonnes'] / row['hectares'] if (not pd.isna(row['tonnes']) and 
                                                not pd.isna(row['hectares']) and 
                                                row['tonnes'] != 0 and 
@@ -197,124 +118,163 @@ new_crop_stats_df['yield_tonnes_per_ha'] = new_crop_stats_df.apply(lambda row:
                                                pd.isna(row['yield_tonnes_per_ha'])) else 
                                                (0 if row['tonnes'] == 0 and row['hectares'] == 0 else row['yield_tonnes_per_ha']), axis=1
 )
-# get new missing values plot for yield (tonnes/ha)
 
-columns_to_visualize = ['yield_tonnes_per_ha']
-gfs.plot_missing_data_proportions(new_crop_stats_df, 'country', columns_to_visualize, pathout_plots=pathout_plots)
+# replace all remaining zeros and empty entries with NaNs
+crop_stats_df['yield_tonnes_per_ha'].replace(['', ' ', 0], np.nan, inplace=True)
+crop_stats_df['region'].replace(['', ' ', 0], np.nan, inplace=True)
+crop_stats_df['hectares'].replace(['', ' ', 0], np.nan, inplace=True)
+crop_stats_df['tonnes'].replace(['', ' ', 0], np.nan, inplace=True)
 
-# replace all zeros and empty entries with NaNs
-new_crop_stats_df['yield_tonnes_per_ha'].replace(['', ' ', 0], np.nan, inplace=True)
-new_crop_stats_df['region'].replace(['', ' ', 0], np.nan, inplace=True)
-new_crop_stats_df['hectares'].replace(['', ' ', 0], np.nan, inplace=True)
-new_crop_stats_df['tonnes'].replace(['', ' ', 0], np.nan, inplace=True)
+# look at missing data percentages for relevant variables: yield, tonnes and hectares per country across regions
+
+# calculate the median/sum values for variables of interest per country and crop for each year across regions
+variables_to_compute = ['yield_tonnes_per_ha', 'tonnes', 'hectares']
+new_variable_names = ['yield_per_country', 'tonnes_per_country', 'hectares_per_country']
+metrics = ['median', 'sum', 'sum']
+grouping_columns = ['year', 'crop', 'country']
+crop_stats_df = gfs.compute_aggregations_and_merge(crop_stats_df, variables_to_compute, new_variable_names, metrics, grouping_columns)
+
+# plot barplots of missing values for variables of interest grouped by country
+columns_to_visualize = ['yield_per_country', 'tonnes_per_country', 'hectares_per_country']
+gfs.plot_missing_data_percentage(crop_stats_df, columns_to_visualize, ['maize', 'wheat'], 'country', pathout_plots)
+
+# plot barplots of missing values for variables of interest grouped by year
+gfs.plot_missing_data_percentage(crop_stats_df, columns_to_visualize, ['maize', 'wheat'], 'year', pathout_plots)
+
+pd.set_option('display.max_rows', None)
+print(data_to_plot.groupby('year')['yield_tonnes_per_ha'].apply(lambda x: x.isna().mean()))
+print(new_crop_stats_df.groupby('year').size())
 #--------------------------------------------------------------------------
-# 2. interpolate the data
+# get distributions of yield across years for each country
+gfs.plot_histograms(crop_stats_df, 'yield_per_country', 'country', ['maize', 'wheat'], 5, pathout_plots)
+#--------------------------------------------------------------------------
+# get distributions of yield per country for each 5-year period
+crop_stats_df['year_section'] = ((crop_stats_df['year'] - crop_stats_df['year'].min()) // 5) * 5
+gfs.plot_histograms(crop_stats_df, 'yield_per_country', 'year_section', ['maize', 'wheat'], 5, pathout_plots)
+#--------------------------------------------------------------------------
+# get time-series of yield (tonnes/ha) for each country across regions
+crops = ['maize', 'wheat']
+gfs.plot_time_series_by_group(crop_stats_df, 'yield_tonnes_per_ha', pathout_plots, crops, group_var='country',
+                              metric='median',num_rows=5)
 
-print(new_crop_stats_df['yield_tonnes_per_ha'].isna().sum())
+# get time-series of global yield (median) for each year across countries
+gfs.plot_time_series_by_group(crop_stats_df, 'yield_per_country', pathout_plots, crops, group_var=None,
+                              metric='median',num_rows=1)
 
-# group by country and find the number of unique regions for each
-unique_regions_per_country = new_crop_stats_df.groupby('country')['region'].nunique()
+#--------------------------------------------------------------------------
+# DATA CLEANING
+#--------------------------------------------------------------------------
+# handling missing values:
+# 1. missing values at the start and end of the time period considered (1900 - 2023) shall not be replaced; 
+# 2. for missing values in between, we interpolate those using linspace() where missing 
+# data periods do not exceed 10 (otherwise datapoints remain NaN)  
 
-# get countries without regions
-countries_without_regions = new_crop_stats_df[new_crop_stats_df['region'].isna()]['country'].unique()
+# create a copy of the original DataFrame
+new_crop_stats_df = crop_stats_df.copy()
 
-# get countries with regions
-countries_with_regions = unique_regions_per_country[unique_regions_per_country > 1].index.tolist()
+print(new_crop_stats_df['yield_per_country'].isna().sum())
 
-# for countries without regions
-for country in countries_without_regions:
-    country_mask = new_crop_stats_df['country'] == country
-    filled_series = gfs.interpolate_series(new_crop_stats_df.loc[country_mask, 'yield_tonnes_per_ha'])
-    new_crop_stats_df.loc[country_mask, 'yield_tonnes_per_ha'] = filled_series
+# Assuming you've already imported numpy as np and pandas as pd
+# and your interpolate_series function is defined as before.
 
-# for countries with regions
-for country in countries_with_regions:
-    country_df = new_crop_stats_df[new_crop_stats_df['country'] == country]
+# Assuming you've already imported numpy as np and pandas as pd
+# and your interpolate_series function is defined as before.
+unique_countries = new_crop_stats_df['country'].unique().tolist()
 
-    # for regions with partial data
-    for region, region_df in country_df.groupby('region'):
-        if not region_df['yield_tonnes_per_ha'].isna().all():
-            mask = (new_crop_stats_df['country'] == country) & (new_crop_stats_df['region'] == region)
-            filled_series = gfs.interpolate_series(new_crop_stats_df.loc[mask, 'yield_tonnes_per_ha'])
-            new_crop_stats_df.loc[mask, 'yield_tonnes_per_ha'] = filled_series
+for country in unique_countries:
+    for crop in crops:
+        mask = (new_crop_stats_df['country'] == country) & (new_crop_stats_df['crop'] == crop)
+
+        if mask.sum() > 0:  # Ensure we have rows for this country-crop combination
+            original_na_count = new_crop_stats_df.loc[mask, 'yield_per_country'].isna().sum()
+            
+            # If there are NaN values, attempt interpolation
+            if original_na_count > 0:
+                filled_series = gfs.interpolate_series(new_crop_stats_df.loc[mask, 'yield_per_country'].copy())
+                new_na_count = filled_series.isna().sum()
+
+                # Print to see if interpolation has been effective
+                if original_na_count != new_na_count:
+                    print(f"Country: {country}, Crop: {crop} - NaNs before: {original_na_count}, NaNs after: {new_na_count}")
+
+                new_crop_stats_df.loc[mask, 'yield_per_country'] = filled_series
 
 # check remaining NaNs
-print(new_crop_stats_df['yield_tonnes_per_ha'].isna().sum())
+print(new_crop_stats_df['yield_per_country'].isna().sum())
 #--------------------------------------------------------------------------
 # get new time-series of yield (tonnes/ha) for each country across regions
+gfs.plot_time_series_by_group(crop_stats_df, 'yield_tonnes_per_ha', pathout_plots, crops, group_var='country',
+                              metric='median',num_rows=5)
 
-new_crop_stats_df['yield_tonnes_per_ha'] = pd.to_numeric(new_crop_stats_df['yield_tonnes_per_ha'], errors='coerce')
-new_crop_stats_df['country'] = new_crop_stats_df['country'].astype('category')
-new_crop_stats_df['region'] = new_crop_stats_df['region'].astype('category')
+# get new time-series of global yield (median) for each year across countries
+gfs.plot_time_series_by_group(crop_stats_df, 'yield_per_country', pathout_plots, crops, group_var=None,
+                              metric='median',num_rows=1)
 
-gfs.plot_time_series_by_group(crop_stats_df, 'country', 'yield_tonnes_per_ha', pathout_plots, num_rows=5)
 #--------------------------------------------------------------------------
-# AGGREGATING/WEIGHTING DATA
+# AGGREGATION
 #--------------------------------------------------------------------------
-# strategy: every year will have a global amount of harvested area, and each country or region 
-# will have a portion of it - this portion will be used to weight the yield data per country/region;
-# sometimes harvested area is missing data - in that case, the portion of harvested area that 
-# this country or region has w. r. t. the global amount of harvested across all regions and 
-# countries *and* all years
+# following Andersen et al., include data according to whether countries collectively contribute to some
+# threshold value of crop yield (here 95% of tonnes - should use tonnes rather than tonnes/ha)
 
-# first fill hectares based on whether tonnes & yield (tonnes/ha) exist, but hectares doesn't
-new_crop_stats_df['hectares'] = new_crop_stats_df.apply(lambda row: 
-    row['tonnes'] / row['yield_tonnes_per_ha'] if (not pd.isna(row['tonnes']) and 
-                                               not pd.isna(row['yield_tonnes_per_ha']) and 
-                                               row['tonnes'] != 0 and 
-                                               row['yield_tonnes_per_ha'] != 0 and
-                                               pd.isna(row['hectares'])) else 
-                                               (0 if row['tonnes'] == 0 and row['yield_tonnes_per_ha'] == 0 else row['hectares']), axis=1
-)
+# check what proportion (%) of tonnes is missing for which country/crop & plot this
+df_missing_values = new_crop_stats_df.groupby(["country", "crop"]
+).apply(lambda x: (pd.isnull(x["tonnes_per_country"])).mean()).reset_index()
 
-# get time-series of harvested area (ha) for each country across regions
-gfs.plot_time_series_by_group(crop_stats_df, 'country', 'hectares', pathout_plots, num_rows=5)
-
-# calculate the total harvested area globally for each year
-global_hectares_per_year = new_crop_stats_df.groupby('year')['hectares'].sum()
-
-# calculate the total harvested area globally across all years
-global_hectares_total = new_crop_stats_df['hectares'].sum()
-
-# calculate the total harvested area for each country/region across all years
-total_hectares_per_country = new_crop_stats_df.groupby(['country', 'region'])['hectares'].sum()
-
-# calculate the proportion of each country/region's harvested area to the global total across all years
-all_years_proportion = total_hectares_per_country / global_hectares_total
-
-# adjusting the original calculation:
-def calculate_hectares_proportion(row):
-    if pd.isna(row['hectares']):
-        return all_years_proportion.get((row['country'], row['region']), 0)
-    else:
-        return row['hectares'] / global_hectares_per_year[row['year']]
-
-new_crop_stats_df['hectares_proportion'] = new_crop_stats_df.apply(calculate_hectares_proportion, axis=1)
-
-# calculate the weighted yield for each country/region using the hectares proportion
-new_crop_stats_df['weighted_yield_tonnes_per_ha'] = new_crop_stats_df['hectares_proportion'] * new_crop_stats_df['yield_tonnes_per_ha']
-
-# get time-series of weighted yield (tonnes/ha) for each country across regions
-gfs.plot_time_series_by_group(new_crop_stats_df, 'country', 'weighted_yield_tonnes_per_ha', pathout_plots, num_rows=5)
-import matplotlib.pyplot as plt
-
-
-# Reset the index to avoid issues with duplicate indices
-data_to_plot = new_crop_stats_df[['year', 'weighted_yield_tonnes_per_ha']].reset_index(drop=True)
-
-# Use seaborn's lineplot function
-plt.figure(figsize=(12, 6))
-sns.lineplot(data=data_to_plot, x="year", y="weighted_yield_tonnes_per_ha", ci=95, estimator="median")
-
-plt.title('global median of weighted yield (tonnes/ha) over time with bootstrapped uncertainty')
-plt.xlabel('Year')
-plt.ylabel('Yield (tonnes/ha)')
-plt.grid(True)
-plt.tight_layout()
-plt.savefig(pathout_plots+r'global_median_weighted_yield_tonnes_per_ha_years.png', bbox_inches='tight', dpi=300)
+sns.barplot(data=df_missing_values, y=0, x='country', hue="crop")
+plt.xticks(rotation=45, ha='right')
+plt.xlabel('country')
+plt.ylabel('% of Missing Values')
+plt.title('tonnes: percentage of missing values per country & crop')
 plt.show()
 
+# include country in analysis only if it contributes to 95% of crop yield (tonnes) in 2010
+# (following Andersen et al.)
+new_crop_stats_df_2010 = new_crop_stats_df[new_crop_stats_df['year'] == 2010]
 
+# calculate total tonnes by country for 2010
+total_tonnes_by_country = new_crop_stats_df_2010.groupby('country')['tonnes'].sum().sort_values(ascending=False)
+
+# Calculate cumulative sum
+cumsum_tonnes = total_tonnes_by_country.cumsum()
+
+# Determine the 90% cutoff
+cutoff_90_percent = total_tonnes_by_country.sum() * 0.95
+
+# Get countries that make up the first 90%
+top_countries = cumsum_tonnes[cumsum_tonnes <= cutoff_90_percent].index
+
+# Filter the original dataframe
+new_crop_stats_df = new_crop_stats_df[new_crop_stats_df['country'].isin(top_countries)]
+
+# calculate the median/sum values for variables of interest per crop for each year across countries
+variables_to_compute = ['yield_per_country']
+new_variable_names = ['global_yield']
+metrics = ['sum']
+grouping_columns = ['year', 'crop']
+new_crop_stats_df = gfs.compute_aggregations_and_merge(new_crop_stats_df, variables_to_compute, new_variable_names, metrics, grouping_columns)
+
+#--------------------------------------------------------------------------
+# YEARLY CHANGE
+#--------------------------------------------------------------------------
+# get yearly change in global crop yield (separate for wheat and maize)
+
+yearly_yield_df = new_crop_stats_df.groupby(['year', 'crop'])['global_yield'].first().reset_index()
+yearly_yield_df['yearly_change_global_yield'] = yearly_yield_df.groupby('crop')['global_yield'].diff()
+
+new_crop_stats_df = pd.merge(new_crop_stats_df, yearly_yield_df[['year', 'crop', 'yearly_change_global_yield']], on=['year', 'crop'], how='left')
+
+plt.figure(figsize=(12, 6))
+sns.lineplot(data=yearly_yield_df, x="year", y="yearly_change_global_yield", hue="crop", ci=95)
+
+plt.title('Yearly change in global median of yield (tonnes/ha)')
+plt.xlabel('Year')
+plt.ylabel('Change in global yield (tonnes/ha)')
+plt.legend(title="Crop", loc="upper left")  # Position the legend
+plt.grid(True)
+plt.tight_layout()
+plt.savefig(f"{pathout_plots}median_global_yield_change_over_years.png", bbox_inches='tight', dpi=300)
+    
+plt.show()
 
 
 

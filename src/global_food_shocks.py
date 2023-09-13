@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+
 def rename_columns(df, rename_dict):
     """
     Renames columns of a DataFrame based on a provided dictionary.
@@ -14,48 +15,116 @@ def rename_columns(df, rename_dict):
     Returns:
     - pd.DataFrame: DataFrame with renamed columns.
     """
+    new_column_names = [rename_dict[col] if col in rename_dict else col for col in df.columns]
+
+    if len(new_column_names) != len(set(new_column_names)):
+        raise ValueError("Renaming would create duplicate column names")
+
     return df.rename(columns=rename_dict, inplace=True)
 
 
-def plot_missing_data_percentage(df, variables_to_plot, crops, grouping_variable, pathout):
+
+def replace_values_in_columns(df, columns, values_to_replace, replacement=np.nan):
     """
-    Plots missing data percentage of the specified variables across different crops and years grouped by the specified variable.
-    
+    Replaces specified values in given DataFrame columns.
+
     Parameters:
-    - df: Pandas DataFrame
-    - variables_to_plot: List of column names whose missing data percentage needs to be plotted
-    - crops: List of crops to be plotted
-    - grouping_variable: Variable by which data is to be grouped (e.g., country)
-    - pathout: Output path for saving the plots (without file extension)
+    - df (pd.DataFrame): The DataFrame you want to modify.
+    - columns (list): List of column names where the values need to be replaced.
+    - values_to_replace (list): List of values you want to replace.
+    - replacement (default=np.nan): The value to replace the unwanted values with.
+
+    Returns:
+    - pd.DataFrame: Modified DataFrame.
     """
+
+    for col in columns:
+        df[col].replace(values_to_replace, replacement, inplace=True)
+
+    return df
+
+
+
+def calc_miss_val_percentages(df, variables_to_compute, crops, grouping_variables):
+    """
+    Calculate missing data percentage of the specified variables.
+
+    Parameters:
+    - df: DataFrame with data
+    - variables_to_compute: List of column names whose missing data percentage needs to be calculated
+    - crops: List of crops for which missing data percentage is calculated
+    - grouping_variables: List of columns by which data is to be grouped
     
-    # Filter the dataframe for only the crops in question
+    Returns:
+    - DataFrame with columns for each variable in variables_to_compute plus the specified grouping variables
+    """
+    if not isinstance(df, pd.DataFrame):
+        raise ValueError("df should be a pandas DataFrame")
+    
+    if not (isinstance(variables_to_compute, list) and all(isinstance(i, str) for i in variables_to_compute) and variables_to_compute):
+        raise ValueError("variables_to_compute should be a non-empty list of strings")
+    
+    if not (isinstance(crops, list) and all(isinstance(i, str) for i in crops) and crops):
+        raise ValueError("crops should be a non-empty list of strings")
+    
+    if not (isinstance(grouping_variables, list) and all(isinstance(i, str) for i in grouping_variables) and grouping_variables):
+        raise ValueError("grouping_variables should be a non-empty list of strings")
+
+    # filter the dataframe for only the crops in question
     df = df[df['crop'].isin(crops)]
 
-    for variable in variables_to_plot:
-        # Calculate the missing data percentages
-        if grouping_variable == 'year':
-            missing_percentage = df.groupby(['year', 'crop']).apply(lambda group: group[variable].isna().mean() * 100).rename('missing_percentage').reset_index()
-        else:
-            grouping_columns = [grouping_variable, 'year', 'crop'] if isinstance(grouping_variable, str) else list(grouping_variable) + ['year', 'crop']
-            missing_percentage = df.groupby(grouping_columns).apply(lambda group: group[variable].isna().mean() * 100).rename('missing_percentage').reset_index()
+    group_cols = grouping_variables + ['crop']
 
-        # Plotting
+    # create an empty dataframe to hold the results
+    result_df = df.groupby(group_cols).size().reset_index().drop(0, axis=1)
+
+    for variable in variables_to_compute:
+        missing_percentage = df.groupby(group_cols).apply(lambda group: group[variable].isna().mean() * 100).reset_index(name=variable)
+        missing_percentage = df.groupby(group_cols).apply(lambda group: group[variable].isna().mean() * 100).reset_index()
+        missing_percentage.columns = group_cols + [variable]
+
+        result_df = pd.merge(result_df, missing_percentage, on=group_cols, how='left')
+
+    return result_df
+
+
+def plot_miss_val_percentages(df, variables_to_compute, crops, grouping_variables, pathout):
+    """
+    Plot missing data percentages for all specified variables from the given DataFrame.
+
+    Parameters:
+    - df: DataFrame with columns specified in [grouping_variables], 'crop', and a list of variables 
+      to compute in [variables_to_compute].
+    - variables_to_compute: List of column names whose missing data percentage needs to be plotted.
+    - crops: List of crops for which the missing data percentages are to be plotted.
+    - grouping_variables: List of columns by which data is grouped.
+    - pathout: Output path for saving the plots (without file extension).
+    """
+    # filter the dataframe for only the crops in question
+    df = df[df['crop'].isin(crops)]
+
+    # create a composite label for the x-axis if multiple grouping variables
+    if len(grouping_variables) > 1:
+        df['composite_label'] = df[grouping_variables].astype(str).agg(' | '.join, axis=1)
+        x_label = 'composite_label'
+    else:
+        x_label = grouping_variables[0]
+    
+    for variable in variables_to_compute:
         plt.figure(figsize=(12, 8))
-        sns.barplot(x=grouping_variable, y='missing_percentage', hue='crop', data=missing_percentage)
-        plt.title(f"Missing Data Percentage for {variable} grouped by {grouping_variable}")
-        plt.ylabel("Missing Percentage (%)")
+        sns.barplot(x=x_label, y=variable, hue='crop', data=df, ci=None)
+        plt.title(f"missing data percentage for {variable} grouped by {', '.join(grouping_variables)}")
+        plt.ylabel("missing percentage (%)")
         plt.xticks(rotation=45)
         plt.tight_layout()
-        
-
-        # Construct output path for each variable
-        #full_pathout = f"{pathout}_{variable}.png"
-        #plt.savefig(pathout_plots+f'distr_{plot_var}_{grouping_var}.png', bbox_inches='tight', dpi=300)
-        plt.savefig(pathout+f'distr_{variable}_by_{grouping_variable}.png', bbox_inches='tight', dpi=300)
+        plt.savefig(pathout + f'distr_{variable}_by_{"_".join(grouping_variables)}.png', bbox_inches='tight', dpi=300)
         plt.show()
-        #plt.savefig(full_pathout)
         plt.close()
+
+    # drop the composite label column if it was created
+    if 'composite_label' in df.columns:
+        df.drop('composite_label', axis=1, inplace=True)
+
 
 
 def plot_histograms(df, plot_var, grouping_var, crops, num_rows, pathout_plots):
@@ -108,10 +177,12 @@ def plot_histograms(df, plot_var, grouping_var, crops, num_rows, pathout_plots):
 
     # adjust the layout to prevent overlap
     plt.tight_layout()
-    plt.suptitle(f'distributions of {plot_var} across {grouping_var}', y=1.02, fontsize=20)
-    plt.savefig(pathout_plots+f'distr_{plot_var}_across_{grouping_var}.png', bbox_inches='tight', dpi=300)
+    plt.suptitle(f'distributions of {plot_var} by {grouping_var}', y=1.02, fontsize=20)
+    plt.savefig(pathout_plots+f'distr_{plot_var}_by_{grouping_var}.png', bbox_inches='tight', dpi=300)
 
     plt.show()
+
+
 
 def plot_time_series_by_group(df, y_var, pathout_plots, crops, group_var=None, metric='median', num_rows=5):
     """
@@ -133,20 +204,20 @@ def plot_time_series_by_group(df, y_var, pathout_plots, crops, group_var=None, m
     if metric not in ['sum', 'median', 'mean']:
         raise ValueError("Invalid metric. Supported metrics are: 'sum', 'median', 'mean'")
 
-    # Filter dataframe by the crops provided
+    # filter dataframe by the crops provided
     df = df[df['crop'].isin(crops)]
     
-    # If no grouping is required
+    # if no grouping is required
     if group_var is None:
         plt.figure(figsize=(10, 6))
         sns.lineplot(data=df, x="year", y=y_var, hue='crop', ci=95, estimator=metric)
-        plt.title(f'Time Series of {metric} {y_var}', fontsize=20)
-        plt.xlabel('Year')
-        plt.ylabel(f'{metric} {y_var}')
+        plt.title(f'time series of {metric} of {y_var}', fontsize=20)
+        plt.xlabel('year')
+        plt.ylabel(f'{metric} of {y_var}')
         plt.grid(True)
         plt.tight_layout()
-        plt.legend(title='Crop')
-        plt.savefig(f"{pathout_plots}{metric}_{y_var}_years.png", bbox_inches='tight', dpi=300)
+        plt.legend(title='crop')
+        plt.savefig(f"{pathout_plots}{metric}_{y_var}_by_{group_var}.png", bbox_inches='tight', dpi=300)
         plt.show()
         return
 
@@ -167,7 +238,7 @@ def plot_time_series_by_group(df, y_var, pathout_plots, crops, group_var=None, m
         axes[i].set_xlabel('year')
         axes[i].set_ylabel(f'{metric} {y_var}')
         axes[i].grid(True)
-        axes[i].legend(title='Crop')
+        axes[i].legend(title='crop')
 
     # remove any remaining empty subplots
     for j in range(len(unique_groups), len(axes)):
@@ -175,9 +246,10 @@ def plot_time_series_by_group(df, y_var, pathout_plots, crops, group_var=None, m
 
     # adjust the layout to prevent overlap and set a centered supertitle
     plt.tight_layout()
-    fig.suptitle(f'time-series of {metric} {y_var} for each {group_var}', y=1.05, fontsize=20)
-    plt.savefig(f"{pathout_plots}{metric}_{y_var}_years_{group_var}.png", bbox_inches='tight', dpi=300)
+    fig.suptitle(f'time series of {metric} of {y_var} for each {group_var}', y=1.05, fontsize=20)
+    plt.savefig(f"{pathout_plots}{metric}_{y_var}{group_var}.png", bbox_inches='tight', dpi=300)
     plt.show()
+
 
 
 def interpolate_series(series):
@@ -194,19 +266,19 @@ def interpolate_series(series):
     Note:
     Sequences of NaNs at the start or end of the series are not interpolated.
     """
-    # Helper function to handle NaN sequences
+    # helper function to handle NaN sequences
     def handle_sequence(start, end, series, interpolated_values):
         gap_size = end - start
         if 1 <= gap_size <= 100:
-            # Ensure we're not on the edge of the series
+            # ensure we're not on the edge of the series
             if start > 0 and end < len(series):
                 linspace_values = np.linspace(series.iloc[start-1], series.iloc[end], gap_size+2)[1:-1]
                 interpolated_values.iloc[start:end] = linspace_values
 
-    # Placeholder for interpolated values
+    # placeholder for interpolated values
     interpolated_values = series.copy()
 
-    # Manually loop to determine NaN sequences
+    # manually loop to determine NaN sequences
     start = None
     for i in range(len(series)):
         if np.isnan(series.iloc[i]) and start is None:
@@ -215,11 +287,12 @@ def interpolate_series(series):
             handle_sequence(start, i, series, interpolated_values)
             start = None
     
-        # After the loop, let's print if there are any interpolated values
+        # after the loop, let's print if there are any interpolated values
     if series.isna().sum() != interpolated_values.isna().sum():
         print("Interpolation occurred!")
 
     return interpolated_values
+
 
 
 def check_for_duplicate_indices(df):
@@ -237,7 +310,8 @@ def check_for_duplicate_indices(df):
         raise ValueError(f"Duplicate indices found: {duplicated}")
 
 
-def compute_aggregations_and_merge(df, variables_to_compute, new_variable_names, metrics, group_by_columns):
+
+def compute_aggregations(df, variables_to_compute, new_variable_names, metrics, group_by_columns):
     """
     Computes the specified aggregation metric (e.g., median, sum) of given variables 
     (grouped by the provided grouping columns) and merges the results back to the original dataframe with new variable names.
@@ -256,20 +330,13 @@ def compute_aggregations_and_merge(df, variables_to_compute, new_variable_names,
     if not (len(variables_to_compute) == len(new_variable_names) == len(metrics)):
         raise ValueError("All input lists should have the same length.")
     
-    for variable, new_name, metric in zip(variables_to_compute, new_variable_names, metrics):
-        # Compute the specified aggregation for each variable
-        aggregation = df.groupby(group_by_columns)[variable].agg(metric).astype(float).reset_index()
-        aggregation = aggregation.rename(columns={variable: new_name})
-        
-        # Merge the computed aggregation back to the original dataframe
-        df = pd.merge(df, aggregation, on=group_by_columns, how='left')
-        
-    # After all aggregations, replace zeros with NaNs where the original variable was NaN
-    for variable, new_name in zip(variables_to_compute, new_variable_names):
-        mask = df[variable].isna()
-        df.loc[mask, new_name] = np.nan
+    # compute the specified aggregation for each variable
+    aggregation = df.groupby(group_by_columns).agg(
+        {variable: metric for variable, metric in zip(variables_to_compute, metrics)}).astype(float).reset_index()
+    aggregation = aggregation.rename(columns={variable: new_name for variable, new_name in zip(variables_to_compute, new_variable_names)})
 
-    return df
+    return aggregation
+
 
 
 

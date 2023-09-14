@@ -621,6 +621,7 @@ for crop in crops:
 # - Inspect increasing variance more: quantify variance change more precisely and visualize this,
 # - components in country-level crop yield time series could be inspected using either Principal Component Analysis or some other time-series-specific decomposition method - this could shed light on different influencing factors driven by different countries that so far have been missed here,
 # - statistically test the hypothesis about an increasing trend or anomalous time period,
-# - improve global scale aggregation (e.g., weight data instead of excluding countries).
+# - improve global scale aggregation (e.g., weight data instead of excluding countries),
+# - more tests, such as end-to-end tests of the analysis.
 
 # 

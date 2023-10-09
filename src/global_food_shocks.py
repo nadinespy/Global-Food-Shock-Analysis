@@ -217,7 +217,7 @@ def plot_time_series_by_group(df, y_var, pathout_plots, crops, group_var=None, m
     for i, group in enumerate(unique_groups):
         data_for_group = df[df[group_var] == group]
         
-        sns.lineplot(data=data_for_group, x="year", y=y_var, hue='crop', ci=95, estimator=metric, ax=axes[i])
+        sns.lineplot(data=data_for_group, x="year", y=y_var, hue='crop', errorbar=('ci', 95), estimator=metric, ax=axes[i])
         
         axes[i].set_title(group, position=(0.5, 1.02))
         axes[i].set_xlabel('year')

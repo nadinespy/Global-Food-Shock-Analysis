@@ -29,5 +29,5 @@ pip install .
 
 ## How to run the analysis
 
-Navigate to the scripts folder and execute the Jupyter notebook `analysis_global_food_shocks.ipynb` or alternatively execute the Python file `analysis_global_food_shocks.py`.
-Results are presented within the notebook and plots are generated in the `results/` folder.
+Navigate to the scripts folder and execute the Jupyter notebook [analysis_global_food_shocks.ipynb`](https://github.com/nadinespy/Global-Food-Shock-Analysis/blob/main/scripts/analysis_global_food_shocks.ipynb)or alternatively execute the Python file [analysis_global_food_shocks.py](https://github.com/nadinespy/Global-Food-Shock-Analysis/blob/main/scripts/analysis_global_food_shocks.py)
+Results are presented within the notebook and plots are generated in the [plots folder](https://github.com/nadinespy/Global-Food-Shock-Analysis/tree/main/results/plots).

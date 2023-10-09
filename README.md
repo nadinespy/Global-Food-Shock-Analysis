@@ -1,6 +1,6 @@
-# Global Food Shock Analysis - Work Trial
+# Global Food Shock Analysis
 
-This is the repository for analyzing global yield decrease using the data from:
+This is the repository (template used from for analyzing global yield decrease using the data from:
 
 Anderson, W., W. Baethgen, F. Capitanio, P. Ciais, G. Cunha, L. Goddard, B. Schauberger , K. Sonder, G. Podesta, M. van der Velde, L. You, and Y. Ru. 2022. Twentieth Century Crop Statistics, 1900-2017. Palisades, New York: NASA Socioeconomic Data and Applications Center (SEDAC). https://doi.org/10.7927/tmsp-sg82. Accessed 5th September 2023. 
 

@@ -1,6 +1,6 @@
 # Global Food Shock Analysis
 
-This is the repository (template used from for analyzing global yield decrease using the data from:
+This is the repository for analyzing global yield decrease using the data from:
 
 Anderson, W., W. Baethgen, F. Capitanio, P. Ciais, G. Cunha, L. Goddard, B. Schauberger , K. Sonder, G. Podesta, M. van der Velde, L. You, and Y. Ru. 2022. Twentieth Century Crop Statistics, 1900-2017. Palisades, New York: NASA Socioeconomic Data and Applications Center (SEDAC). https://doi.org/10.7927/tmsp-sg82. Accessed 5th September 2023. 
 
@@ -10,21 +10,13 @@ Major objective is to derive yearly global yield decrease (considering wheat & m
 
 ## How to install
 
-Clone the repository and create a virtual environment by instantiating a new folder called venv, and instantiating a virtual environment equally called venv in the terminal:
+Clone the repository and create a virtual environment using poetry where you'll install all necessary dependencies:
 ```
-$ python3 -m venv venv         # creating a new folder called "venv", 
-                               # and instantiating a virtual environment 
-                               # equally called "venv"
+$ poetry shell                                          # create virtual environment
 
-$ source venv/bin/activate     # activate virtual environment
+(global-food-shock-analysis-py3.8) $ poetry install     # install necessary dependencies
 
-(venv) $ deactivate            # deactivate virtual environment
-```
-
-Then install requirements as well as the local Python module for the analysis
-```
-pip install -r requirements.txt
-pip install .
+(global-food-shock-analysis-py3.8) $ exit               # deactivate virtual environment
 ```
 
 ## How to run the analysis
